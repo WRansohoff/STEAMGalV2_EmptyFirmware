@@ -6,16 +6,20 @@
 // Core includes.
 #ifdef VVC_F0
   #include "stm32f0xx.h"
+#elif VVC_L0
+  #include "stm32l0xx.h"
 #elif VVC_F3
   #include "stm32f3xx.h"
 #endif
 
-// Define GPIOB pin mappings for software '4-wire' SPI interface.
+// Define GPIO pin mappings for software '4-wire' SPI interface.
 #define PB_MOSI (5)
 #define PB_SCK  (3)
 #define PB_DC   (4)
 #define PA_CS   (15)
 #define PA_RST  (12)
+// Define general GPIO pin mappings.
+#define PA_LED  (11)
 
 // Assembly methods.
 extern void delay_cycles(unsigned int d);

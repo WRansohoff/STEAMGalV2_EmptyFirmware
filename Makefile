@@ -1,8 +1,9 @@
 TARGET = main
 
 # Default target chip.
-MCU ?= STM32F031K6
+#MCU ?= STM32F031K6
 #MCU ?= STM32F051K8
+MCU ?= STM32L082KZ
 # TODO: Support F303
 #MCU ?= STM32F303K8
 
@@ -14,6 +15,10 @@ else ifeq ($(MCU), STM32F051K8)
 	MCU_FILES  = STM32F051K8T6
 	ST_MCU_DEF = STM32F051x8
 	MCU_CLASS  = F0
+else ifeq ($(MCU), STM32L082KZ)
+	MCU_FILES  = STM32L082KZT6
+	ST_MCU_DEF = STM32L082xx
+	MCU_CLASS  = L0
 else ifeq ($(MCU), STM32F303K8)
 	MCU_FILES  = STM32F303K8T6
 	ST_MCU_DEF = STM32F303x8
@@ -24,6 +29,8 @@ endif
 LD_SCRIPT = $(MCU_FILES).ld
 ifeq ($(MCU_CLASS), F0)
 	MCU_SPEC = cortex-m0
+else ifeq ($(MCU_CLASS), L0)
+	MCU_SPEC = cortex-m0plus
 else ifeq ($(MCU_CLASS), F3)
 	MCU_SPEC = cortex-m4
 endif

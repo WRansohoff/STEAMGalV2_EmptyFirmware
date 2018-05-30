@@ -216,11 +216,3 @@ void TIM2_IRQ_handler(void) {
     // (TIM2 timer interrupt code)
   }
 }
-
-void TIM16_IRQ_handler(void) {
-  // Handle a timer 'update' interrupt event
-  if (TIM16->SR & TIM_SR_UIF) {
-    TIM16->SR &= ~(TIM_SR_UIF);
-    // (TIM16 timer interrupt handler code)
-  }
-}

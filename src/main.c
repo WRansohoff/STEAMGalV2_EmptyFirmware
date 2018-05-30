@@ -29,6 +29,33 @@ int main(void) {
     while (!(RCC->CFGR & RCC_CFGR_SWS_PLL)) {};
     // The system clock is now 48MHz.
     core_clock_hz = 48000000;
+  #elif VVC_L0
+    // Set the Flash ACR to use 1 wait-state
+    // and enable the prefetch buffer and pre-read.
+    FLASH->ACR |=  (FLASH_ACR_LATENCY |
+                    FLASH_ACR_PRFTEN |
+                    FLASH_ACR_PRE_READ);
+    // Enable the HSI oscillator, since the L0 series boots
+    // to the MSI one.
+    RCC->CR    |=  (RCC_CR_HSION);
+    while (!(RCC->CR & RCC_CR_HSIRDY)) {};
+    // Configure the PLL to use HSI16 with a PLLDIV of
+    // 2 and PLLMUL of 4.
+    RCC->CFGR  &= ~(RCC_CFGR_PLLDIV |
+                    RCC_CFGR_PLLMUL |
+                    RCC_CFGR_PLLSRC);
+    RCC->CFGR  |=  (RCC_CFGR_PLLDIV2 |
+                    RCC_CFGR_PLLMUL4 |
+                    RCC_CFGR_PLLSRC_HSI);
+    // Enable the PLL and wait for it to stabilize.
+    RCC->CR    |=  (RCC_CR_PLLON);
+    while (!(RCC->CR & RCC_CR_PLLRDY)) {};
+    // Select the PLL as the system clock source.
+    RCC->CFGR  &= ~(RCC_CFGR_SW);
+    RCC->CFGR  |=  (RCC_CFGR_SW_PLL);
+    while (!(RCC->CFGR & RCC_CFGR_SWS_PLL)) {};
+    // Set the global clock speed variable.
+    core_clock_hz = 32000000;
   #elif VVC_F3
     // TODO
   #endif
@@ -52,89 +79,151 @@ int main(void) {
 
   // Enable the GPIOA clock (buttons on pins A2-A7,
   // user LED on pin A12).
-  RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
   // Enable the GPIOB clock (I2C1 used on pins B6/B7,
   // buzzer on pin B0).
-  RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
-  // Enable the TIM2 clock.
-  RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
-  // Enable the TIM3 clock.
-  RCC->APB1ENR |= RCC_APB1ENR_TIM3EN;
-  // Enable the TIM16 clock.
-  RCC->APB2ENR |= RCC_APB2ENR_TIM16EN;
-  // Enable the SPI1 clock.
-  RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
+  #if defined(VVC_F0) || defined(VCC_F3)
+    RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
+    RCC->AHBENR |= RCC_AHBENR_GPIOBEN;
+  #elif VVC_L0
+    RCC->IOPENR   |= RCC_IOPENR_IOPAEN;
+    RCC->IOPENR   |= RCC_IOPENR_IOPBEN;
+  #endif
   // Enable the SYSCFG clock for EXTI hardware interrupts.
   RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
 
-  // Setup GPIO pins A6, A7, A8, A9, B0, and B1 as inputs
-  // with pullups, low-speed.
-  GPIOA->MODER   &= ~(GPIO_MODER_MODER6 |
-                      GPIO_MODER_MODER7 |
-                      GPIO_MODER_MODER8 |
-                      GPIO_MODER_MODER9);
-  GPIOB->MODER   &= ~(GPIO_MODER_MODER0  |
-                      GPIO_MODER_MODER1);
-  GPIOA->PUPDR   &= ~(GPIO_PUPDR_PUPDR6 |
-                      GPIO_PUPDR_PUPDR7 |
-                      GPIO_PUPDR_PUPDR8 |
-                      GPIO_PUPDR_PUPDR9);
-  GPIOB->PUPDR   &= ~(GPIO_PUPDR_PUPDR0  |
-                      GPIO_PUPDR_PUPDR1);
-  GPIOA->PUPDR   |=  ((1 << GPIO_PUPDR_PUPDR6_Pos) |
-                      (1 << GPIO_PUPDR_PUPDR7_Pos) |
-                      (1 << GPIO_PUPDR_PUPDR8_Pos) |
-                      (1 << GPIO_PUPDR_PUPDR9_Pos));
-  GPIOB->PUPDR   |=  ((1 << GPIO_PUPDR_PUPDR0_Pos) |
-                      (1 << GPIO_PUPDR_PUPDR1_Pos));
+  #if defined(VVC_F0) || defined(VCC_F3)
+    // Setup GPIO pins A6, A7, A8, A9, B0, and B1 as inputs
+    // with pullups, low-speed.
+    GPIOA->MODER   &= ~(GPIO_MODER_MODER6 |
+                        GPIO_MODER_MODER7 |
+                        GPIO_MODER_MODER8 |
+                        GPIO_MODER_MODER9);
+    GPIOB->MODER   &= ~(GPIO_MODER_MODER0  |
+                        GPIO_MODER_MODER1);
+    GPIOA->PUPDR   &= ~(GPIO_PUPDR_PUPDR6 |
+                        GPIO_PUPDR_PUPDR7 |
+                        GPIO_PUPDR_PUPDR8 |
+                        GPIO_PUPDR_PUPDR9);
+    GPIOB->PUPDR   &= ~(GPIO_PUPDR_PUPDR0  |
+                        GPIO_PUPDR_PUPDR1);
+    GPIOA->PUPDR   |=  ((1 << GPIO_PUPDR_PUPDR6_Pos) |
+                        (1 << GPIO_PUPDR_PUPDR7_Pos) |
+                        (1 << GPIO_PUPDR_PUPDR8_Pos) |
+                        (1 << GPIO_PUPDR_PUPDR9_Pos));
+    GPIOB->PUPDR   |=  ((1 << GPIO_PUPDR_PUPDR0_Pos) |
+                        (1 << GPIO_PUPDR_PUPDR1_Pos));
 
-  // Setup GPIO pins A10, A11, A12, and A15 as push-pull output,
-  // no pupdr, 10MHz max speed.
-  GPIOA->MODER   &= ~(GPIO_MODER_MODER10 |
-                      GPIO_MODER_MODER11 |
-                      GPIO_MODER_MODER12 |
-                      GPIO_MODER_MODER15);
-  GPIOA->MODER   |=  (1 << GPIO_MODER_MODER10_Pos |
-                      1 << GPIO_MODER_MODER11_Pos |
-                      1 << GPIO_MODER_MODER12_Pos |
-                      1 << GPIO_MODER_MODER15_Pos);
-  GPIOA->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEEDR10 |
-                      GPIO_OSPEEDR_OSPEEDR11 |
-                      GPIO_OSPEEDR_OSPEEDR12 |
-                      GPIO_OSPEEDR_OSPEEDR15);
-  GPIOA->OSPEEDR |=  (1 << GPIO_OSPEEDR_OSPEEDR10_Pos |
-                      1 << GPIO_OSPEEDR_OSPEEDR11_Pos |
-                      1 << GPIO_OSPEEDR_OSPEEDR12_Pos |
-                      1 << GPIO_OSPEEDR_OSPEEDR15_Pos);
-  GPIOA->OTYPER  &= ~(GPIO_OTYPER_OT_10 |
-                      GPIO_OTYPER_OT_11 |
-                      GPIO_OTYPER_OT_12 |
-                      GPIO_OTYPER_OT_15);
-  GPIOA->PUPDR   &= ~(GPIO_PUPDR_PUPDR10 |
-                      GPIO_PUPDR_PUPDR11 |
-                      GPIO_PUPDR_PUPDR12 |
-                      GPIO_PUPDR_PUPDR15);
-  // (Software SPI)
-  // Setup GPIO pin B3, B4, B5 as push-pull output,
-  // no pupdr, 50MHz max speed.
-  GPIOB->MODER   &= ~(GPIO_MODER_MODER3 |
-                      GPIO_MODER_MODER4 |
-                      GPIO_MODER_MODER5);
-  GPIOB->MODER   |=  (1 << GPIO_MODER_MODER3_Pos |
-                      1 << GPIO_MODER_MODER4_Pos |
-                      1 << GPIO_MODER_MODER5_Pos);
-  GPIOB->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEEDR3 |
-                      GPIO_OSPEEDR_OSPEEDR4 |
-                      GPIO_OSPEEDR_OSPEEDR5);
-  GPIOB->OSPEEDR |=  (0x3 << GPIO_OSPEEDR_OSPEEDR3_Pos |
-                      0x3 << GPIO_OSPEEDR_OSPEEDR4_Pos |
-                      0x3 << GPIO_OSPEEDR_OSPEEDR5_Pos);
-  GPIOB->OTYPER  &= ~(GPIO_OTYPER_OT_3 |
-                      GPIO_OTYPER_OT_4 |
-                      GPIO_OTYPER_OT_5);
-  GPIOB->PUPDR   &= ~(GPIO_PUPDR_PUPDR3 |
-                      GPIO_PUPDR_PUPDR4 |
-                      GPIO_PUPDR_PUPDR5);
+    // Setup GPIO pins A10, A11, A12, and A15 as push-pull output,
+    // no pupdr, 10MHz max speed.
+    GPIOA->MODER   &= ~(GPIO_MODER_MODER10 |
+                        GPIO_MODER_MODER11 |
+                        GPIO_MODER_MODER12 |
+                        GPIO_MODER_MODER15);
+    GPIOA->MODER   |=  (1 << GPIO_MODER_MODER10_Pos |
+                        1 << GPIO_MODER_MODER11_Pos |
+                        1 << GPIO_MODER_MODER12_Pos |
+                        1 << GPIO_MODER_MODER15_Pos);
+    GPIOA->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEEDR10 |
+                        GPIO_OSPEEDR_OSPEEDR11 |
+                        GPIO_OSPEEDR_OSPEEDR12 |
+                        GPIO_OSPEEDR_OSPEEDR15);
+    GPIOA->OSPEEDR |=  (1 << GPIO_OSPEEDR_OSPEEDR10_Pos |
+                        1 << GPIO_OSPEEDR_OSPEEDR11_Pos |
+                        1 << GPIO_OSPEEDR_OSPEEDR12_Pos |
+                        1 << GPIO_OSPEEDR_OSPEEDR15_Pos);
+    GPIOA->OTYPER  &= ~(GPIO_OTYPER_OT_10 |
+                        GPIO_OTYPER_OT_11 |
+                        GPIO_OTYPER_OT_12 |
+                        GPIO_OTYPER_OT_15);
+    GPIOA->PUPDR   &= ~(GPIO_PUPDR_PUPDR10 |
+                        GPIO_PUPDR_PUPDR11 |
+                        GPIO_PUPDR_PUPDR12 |
+                        GPIO_PUPDR_PUPDR15);
+    // (Software SPI)
+    // Setup GPIO pin B3, B4, B5 as push-pull output,
+    // no pupdr, 50MHz max speed.
+    GPIOB->MODER   &= ~(GPIO_MODER_MODER3 |
+                        GPIO_MODER_MODER4 |
+                        GPIO_MODER_MODER5);
+    GPIOB->MODER   |=  (1 << GPIO_MODER_MODER3_Pos |
+                        1 << GPIO_MODER_MODER4_Pos |
+                        1 << GPIO_MODER_MODER5_Pos);
+    GPIOB->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEEDR3 |
+                        GPIO_OSPEEDR_OSPEEDR4 |
+                        GPIO_OSPEEDR_OSPEEDR5);
+    GPIOB->OSPEEDR |=  (0x3 << GPIO_OSPEEDR_OSPEEDR3_Pos |
+                        0x3 << GPIO_OSPEEDR_OSPEEDR4_Pos |
+                        0x3 << GPIO_OSPEEDR_OSPEEDR5_Pos);
+    GPIOB->OTYPER  &= ~(GPIO_OTYPER_OT_3 |
+                        GPIO_OTYPER_OT_4 |
+                        GPIO_OTYPER_OT_5);
+    GPIOB->PUPDR   &= ~(GPIO_PUPDR_PUPDR3 |
+                        GPIO_PUPDR_PUPDR4 |
+                        GPIO_PUPDR_PUPDR5);
+  #elif VVC_L0
+    // Setup GPIO pins A6, A7, A8, A9, B0, and B1 as inputs
+    // with pullups, low-speed.
+    GPIOA->MODER   &= ~(GPIO_MODER_MODE6 |
+                        GPIO_MODER_MODE7 |
+                        GPIO_MODER_MODE8 |
+                        GPIO_MODER_MODE9);
+    GPIOB->MODER   &= ~(GPIO_MODER_MODE0  |
+                        GPIO_MODER_MODE1);
+    GPIOA->PUPDR   |=  ((1 << GPIO_PUPDR_PUPD6_Pos) |
+                        (1 << GPIO_PUPDR_PUPD7_Pos) |
+                        (1 << GPIO_PUPDR_PUPD8_Pos) |
+                        (1 << GPIO_PUPDR_PUPD9_Pos));
+    GPIOB->PUPDR   |=  ((1 << GPIO_PUPDR_PUPD0_Pos) |
+                        (1 << GPIO_PUPDR_PUPD1_Pos));
+    // Setup GPIO pins A10, A11, A12, and A15 as push-pull output,
+    // no pupdr, 10MHz max speed.
+    GPIOA->MODER   &= ~(GPIO_MODER_MODE10 |
+                        GPIO_MODER_MODE11 |
+                        GPIO_MODER_MODE12 |
+                        GPIO_MODER_MODE15);
+    GPIOA->MODER   |=  (1 << GPIO_MODER_MODE10_Pos |
+                        1 << GPIO_MODER_MODE11_Pos |
+                        1 << GPIO_MODER_MODE12_Pos |
+                        1 << GPIO_MODER_MODE15_Pos);
+    GPIOA->OSPEEDR &= ~(GPIO_OSPEEDER_OSPEED10 |
+                        GPIO_OSPEEDER_OSPEED11 |
+                        GPIO_OSPEEDER_OSPEED12 |
+                        GPIO_OSPEEDER_OSPEED15);
+    GPIOA->OSPEEDR |=  (1 << GPIO_OSPEEDER_OSPEED10_Pos |
+                        1 << GPIO_OSPEEDER_OSPEED11_Pos |
+                        1 << GPIO_OSPEEDER_OSPEED12_Pos |
+                        1 << GPIO_OSPEEDER_OSPEED15_Pos);
+    GPIOA->OTYPER  &= ~(GPIO_OTYPER_OT_10 |
+                        GPIO_OTYPER_OT_11 |
+                        GPIO_OTYPER_OT_12 |
+                        GPIO_OTYPER_OT_15);
+    GPIOA->PUPDR   &= ~(GPIO_PUPDR_PUPD10 |
+                        GPIO_PUPDR_PUPD11 |
+                        GPIO_PUPDR_PUPD12 |
+                        GPIO_PUPDR_PUPD15);
+    // (Software SPI)
+    // Setup GPIO pin B3, B4, B5 as push-pull output,
+    // no pupdr, 50MHz max speed.
+    GPIOB->MODER   &= ~(GPIO_MODER_MODE3 |
+                        GPIO_MODER_MODE4 |
+                        GPIO_MODER_MODE5);
+    GPIOB->MODER   |=  (1 << GPIO_MODER_MODE3_Pos |
+                        1 << GPIO_MODER_MODE4_Pos |
+                        1 << GPIO_MODER_MODE5_Pos);
+    GPIOB->OSPEEDR &= ~(GPIO_OSPEEDER_OSPEED3 |
+                        GPIO_OSPEEDER_OSPEED4 |
+                        GPIO_OSPEEDER_OSPEED5);
+    GPIOB->OSPEEDR |=  (0x3 << GPIO_OSPEEDER_OSPEED3_Pos |
+                        0x3 << GPIO_OSPEEDER_OSPEED4_Pos |
+                        0x3 << GPIO_OSPEEDER_OSPEED5_Pos);
+    GPIOB->OTYPER  &= ~(GPIO_OTYPER_OT_3 |
+                        GPIO_OTYPER_OT_4 |
+                        GPIO_OTYPER_OT_5);
+    GPIOB->PUPDR   &= ~(GPIO_PUPDR_PUPD3 |
+                        GPIO_PUPDR_PUPD4 |
+                        GPIO_PUPDR_PUPD5);
+  #endif
+
   // Initialize the SPI pins.
   GPIOB->ODR &= ~(1 << PB_SCK);
   GPIOA->ODR &= ~(1 << PA_CS);
@@ -166,28 +255,36 @@ int main(void) {
   SYSCFG->EXTICR[1] &= ~(SYSCFG_EXTICR3_EXTI9);
   SYSCFG->EXTICR[1] |=  (SYSCFG_EXTICR3_EXTI9_PA);
   // Setup the EXTI interrupt lines as 'falling edge' interrupts.
-  EXTI->IMR  |=  (EXTI_IMR_MR0);
-  EXTI->RTSR &= ~(EXTI_RTSR_TR0);
-  EXTI->FTSR |=  (EXTI_FTSR_TR0);
-  EXTI->IMR  |=  (EXTI_IMR_MR1);
-  EXTI->RTSR &= ~(EXTI_RTSR_TR1);
-  EXTI->FTSR |=  (EXTI_FTSR_TR1);
-  EXTI->IMR  |=  (EXTI_IMR_MR6);
-  EXTI->RTSR &= ~(EXTI_RTSR_TR6);
-  EXTI->FTSR |=  (EXTI_FTSR_TR6);
-  EXTI->IMR  |=  (EXTI_IMR_MR7);
-  EXTI->RTSR &= ~(EXTI_RTSR_TR7);
-  EXTI->FTSR |=  (EXTI_FTSR_TR7);
-  EXTI->IMR  |=  (EXTI_IMR_MR8);
-  EXTI->RTSR &= ~(EXTI_RTSR_TR8);
-  EXTI->FTSR |=  (EXTI_FTSR_TR8);
-  EXTI->IMR  |=  (EXTI_IMR_MR9);
-  EXTI->RTSR &= ~(EXTI_RTSR_TR9);
-  EXTI->FTSR |=  (EXTI_FTSR_TR9);
+  #if defined(VVC_F0) || defined(VVC_F3)
+    EXTI->IMR  |=  (EXTI_IMR_MR0 |
+                    EXTI_IMR_MR1 |
+                    EXTI_IMR_MR6 |
+                    EXTI_IMR_MR7 |
+                    EXTI_IMR_MR8 |
+                    EXTI_IMR_MR9);
+  #elif VVC_L0
+    EXTI->IMR  |=  (EXTI_IMR_IM0 |
+                    EXTI_IMR_IM1 |
+                    EXTI_IMR_IM6 |
+                    EXTI_IMR_IM7 |
+                    EXTI_IMR_IM8 |
+                    EXTI_IMR_IM9);
+  #endif
+  EXTI->RTSR &= ~(EXTI_RTSR_TR0 |
+                  EXTI_RTSR_TR1 |
+                  EXTI_RTSR_TR6 |
+                  EXTI_RTSR_TR7 |
+                  EXTI_RTSR_TR8 |
+                  EXTI_RTSR_TR9);
+  EXTI->FTSR |=  (EXTI_FTSR_TR0 |
+                  EXTI_FTSR_TR1 |
+                  EXTI_FTSR_TR6 |
+                  EXTI_FTSR_TR7 |
+                  EXTI_FTSR_TR8 |
+                  EXTI_FTSR_TR9);
 
-  // The HAL 'cortex' libraries basically just call these
-  // core functions for NVIC stuff, anyways:
-  #ifdef VVC_F0
+  // Setup the NVIC hardware interrupts.
+  #if defined(VVC_F0) || defined(VVC_L0)
     NVIC_SetPriority(EXTI0_1_IRQn, 0x03);
     NVIC_EnableIRQ(EXTI0_1_IRQn);
     NVIC_SetPriority(EXTI4_15_IRQn, 0x03);
@@ -208,23 +305,16 @@ int main(void) {
     NVIC_EnableIRQ(EXTI9_5_IRQn);
   #endif
 
-  // Enable the NVIC interrupt for TIM2 and TIM16.
-  // (Timer peripheral initialized and used elsewhere)
-  NVIC_SetPriority(TIM2_IRQn, 0x03);
-  NVIC_EnableIRQ(TIM2_IRQn);
-  NVIC_SetPriority(TIM16_IRQn, 0x03);
-  NVIC_EnableIRQ(TIM16_IRQn);
-
   while (1) {
     // Communicate the framebuffer to the OLED screen.
     sspi_stream_framebuffer();
 
     // Set the onboard LED if the global variable is set.
     if (uled_state) {
-      GPIOA->ODR |=  (GPIO_ODR_11);
+      GPIOA->ODR |=  (1 << PA_LED);
     }
     else {
-      GPIOA->ODR &= ~(GPIO_ODR_11);
+      GPIOA->ODR &= ~(1 << PA_LED);
     }
   }
   return 0;

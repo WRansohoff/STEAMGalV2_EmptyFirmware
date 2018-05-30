@@ -46,14 +46,6 @@ void start_timer(TIM_TypeDef *TIMx,
     RCC->APB1RSTR |=  (RCC_APB1RSTR_TIM3RST);
     RCC->APB1RSTR &= ~(RCC_APB1RSTR_TIM3RST);
   }
-  else if (TIMx == TIM16) {
-    RCC->APB2RSTR |=  (RCC_APB2RSTR_TIM16RST);
-    RCC->APB2RSTR &= ~(RCC_APB2RSTR_TIM16RST);
-  }
-  else if (TIMx == TIM17) {
-    RCC->APB2RSTR |=  (RCC_APB2RSTR_TIM17RST);
-    RCC->APB2RSTR &= ~(RCC_APB2RSTR_TIM17RST);
-  }
   // Set clock division to 1; the timer triggers every N events.
   // Also set the counter to count up.
   TIMx->CR1  &= ~(TIM_CR1_DIR |
@@ -62,8 +54,6 @@ void start_timer(TIM_TypeDef *TIMx,
   TIMx->PSC   =  prescaler;
   // Set 'auto-reload'; this is the timer's period in 'ticks'.
   TIMx->ARR   =  period;
-  // Set the repetition counter to 0; I dunno, unused for now.
-  TIMx->RCR   =  0;
   // Before enabling the counter, trigger an 'update' event to
   // make sure that the chip registers the 'prescaler' settings.
   TIMx->EGR  |=  (TIM_EGR_UG);

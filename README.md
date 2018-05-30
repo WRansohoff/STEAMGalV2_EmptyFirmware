@@ -10,4 +10,4 @@ Mostly working; the program can display to the onboard SSD1331 display using the
 
 It is intended as a quick starting point when writing projects for the board.
 
-Currently, only the STM32F051K8 and STM32F031K6 are supported, but I hope to add the STM32F303K8 as well if time permits, along with L0-series chips, which should also work with the board if an LSE crystal is used in place of an HSE.
+Currently, only the F0 and L0 lines are supported - specifically, only the F031K6, F051K8, and L082KZ. On these 32-pin chips, the L0 lines use a 32.768KHz 'LSE' crystal oscillator, while the F0 lines use an 8MHz 'HSE' one. But this project does not any use external oscillators, and I hope to add the STM32F303K8 as well if time permits.
